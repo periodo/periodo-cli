@@ -1,0 +1,25 @@
+{
+  "name": "periodo-patches",
+  "version": "1.0.0",
+  "description": "CLI for working with PeriodO patches",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/periodo/periodo-patches.git"
+  },
+  "main": "index.js",
+  "bin": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "contributors": [
+    "Ryan Shaw <ryanshaw@unc.edu> (https://aeshin.org)"
+  ],
+  "license": "CC0-1.0",
+  "dependencies": {
+    "colors": "^1.1.2",
+    "concat-stream": "^1.6.0",
+    "minimist": "^1.2.0",
+    "ramda": "^0.24.1",
+    "request": "^2.81.0"
+  }
+}
