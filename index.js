@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const R = require('ramda')
     , fs = require('fs')
     , parseArgs = require('minimist')
