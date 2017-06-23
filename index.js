@@ -2,6 +2,7 @@
 
 const R = require('ramda')
     , fs = require('fs')
+    , os = require('os')
     , parseArgs = require('minimist')
     , readline = require('readline')
     , request = require('request')
@@ -17,6 +18,8 @@ function usage() {
   )
   process.exit(1)
 }
+
+const TOKEN_FILE = `${os.homedir()}/.periodo-token`
 
 const requestGET = promisify(request.get)
 const requestHEAD = promisify(request.head)
@@ -83,7 +86,7 @@ async function askForInput(prompt) {
 
 async function getToken() {
   try {
-    return await readFile('.token')
+    return await readFile(TOKEN_FILE)
   } catch (e) {
     console.log(red('authorization required'))
     const token = await askForInput(`
@@ -91,7 +94,7 @@ An authentication token is needed. See:
 https://github.com/periodo/periodo-patches#authentication
 
 Authentication token: `)
-    await writeFile('.token', token)
+    await writeFile(TOKEN_FILE, token)
     return token
   }
 }
