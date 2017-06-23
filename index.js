@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const R = require('ramda')
+    , concat = require('concat-stream')
     , fs = require('fs')
     , os = require('os')
     , parseArgs = require('minimist')
@@ -99,11 +100,26 @@ Authentication token: `)
   }
 }
 
-async function sendData(filename, options) {
+function extractMessage(buffer) {
+  const s = buffer.toString('utf8')
+  try {
+    return JSON.parse(s)
+  } catch (e) {
+    return {message: s}
+  }
+}
+
+async function sendData(filename, options, expectedStatusCode) {
   return new Promise((resolve, reject) => {
     const requestStream = request(options)
       .on('error', reject)
-      .on('response', resolve)
+      .on('response', response => {
+        if (response.statusCode === expectedStatusCode) {
+          resolve()
+        } else {
+          requestStream.pipe(concat(buffer => reject(extractMessage(buffer))))
+        }
+      })
     fs.createReadStream(filename)
       .on('error', reject)
       .pipe(requestStream)
@@ -113,30 +129,26 @@ async function sendData(filename, options) {
 async function submitPatch(filename) {
   const server_url = await resolve('http://n2t.net/ark:/99152/p0')
   process.stdout.write(`Submitting patch to ${server_url}d.json... `)
-  const response = await sendData(
+  await sendData(
     filename,
     { url: `${server_url}d.json`
     , method: 'PATCH'
     , headers: {'Content-Type': 'application/json'}
     , auth: {bearer: await getToken()}
-    }
+    },
+    202
   )
-  return response.statusCode === 202
-    ? undefined
-    : {message: response.statusMessage}
 }
 
 async function rejectPatch(url) {
   process.stdout.write(`Rejecting patch ${url}... `)
-  const response = await requestPOST(
+  await requestPOST(
     { uri: `${url}reject`
     , headers: {'Accept': 'application/json'}
     , auth: {bearer: await getToken()}
-    }
+    },
+    204
   )
-  return response.statusCode === 204
-    ? undefined
-    : {message: response.statusMessage}
 }
 
 const handleError = e => {
