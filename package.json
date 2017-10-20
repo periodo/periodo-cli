@@ -1,6 +1,6 @@
 {
   "name": "periodo-patches",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "CLI for working with PeriodO patches",
   "repository": {
     "type": "git",
