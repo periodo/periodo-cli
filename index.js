@@ -142,13 +142,17 @@ async function submitPatch(filename) {
 
 async function rejectPatch(url) {
   process.stdout.write(`Rejecting patch ${url}... `)
-  await requestPOST(
+  const o = await requestPOST(
     { uri: `${url}reject`
     , headers: {'Accept': 'application/json'}
     , auth: {bearer: await getToken()}
-    },
-    204
+    }
   )
+  if (o.statusCode == 401) {
+    throw {message: `Token has expired. Delete ${TOKEN_FILE} and try again.`}
+  } else if (o.statusCode != 204) {
+    throw {message: `Server returned ${o.statusCode}`}
+  }
 }
 
 const handleError = e => {
