@@ -1,13 +1,15 @@
 {
-  "name": "periodo-patches",
+  "name": "periodo-cli",
   "version": "1.0.2",
-  "description": "CLI for working with PeriodO patches",
+  "description": "CLI for working with PeriodO resources",
   "repository": {
     "type": "git",
-    "url": "https://github.com/periodo/periodo-patches.git"
+    "url": "https://github.com/periodo/periodo-cli.git"
   },
   "main": "index.js",
-  "bin": "index.js",
+  "bin": {
+    "periodo": "index.js"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -19,7 +21,8 @@
     "colors": "^1.1.2",
     "concat-stream": "^1.6.0",
     "minimist": "^1.2.0",
-    "ramda": "^0.24.1",
-    "request": "^2.81.0"
+    "ramda": "^0.25.0",
+    "request": "^2.83.0",
+    "uuid": "^3.1.0"
   }
 }
