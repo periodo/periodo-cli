@@ -67,11 +67,12 @@ const personalName = async orcid => {
 
 const b = black.bold
 
-const showPatch = async (server_url, {url, created_by, created_at}) => `
- ${b('url')}: ${blue(url)}
+const showPatch = async (server_url, {url, created_by, created_at}) => (
+`${b('url')}: ${blue(url)}
  ${b('who')}: ${created_by} (${await personalName(created_by)})
 ${b('when')}: ${created_at}
-${b('view')}: ${server_url}#/patches/${url}`
+${b('view')}: ${server_url}#/patches/${url}
+`)
 
 async function showPatches(server_url, patches) {
   return Promise.all(R.map(p => showPatch(server_url, p), patches))
@@ -146,7 +147,8 @@ async function listPatches(argv) {
     `${argv.server}patches?open=true&merged=false&order=asc`).toString()
   const patches = (await requestGET({uri: unmergedPatches, json: true})).body
   if (patches.length) {
-    console.log(`Open and unmerged patches at ${green(argv.server)}:`)
+    console.log(`Open and unmerged patches at ${green(argv.server)}:
+    `)
     R.forEach(console.log, await showPatches(argv.server, patches))
   } else {
     console.log(`No open and unmerged patches at ${green(argv.server)}.`)
