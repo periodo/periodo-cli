@@ -21,6 +21,7 @@ function usage() {
 
   list-patches
   submit-patch <patch file>
+  merge-patch  <patch url>
   reject-patch <patch url>
   create-bag   <json file> [<uuid>]
 
@@ -125,8 +126,9 @@ async function sendData(filename, options, expectedStatusCode) {
           resolve()
         } else {
           requestStream.pipe(concat(buffer => {
-            const message = (response.statusCode == 401)
-              ? `Token has expired. Delete ${TOKEN_FILE} and try again.`
+            const message = (response.statusCode === 401)
+              ? {message: `
+Token has expired. Delete ${TOKEN_FILE} and try again.`}
               : extractMessage(buffer)
             reject(message)
           }))
@@ -166,12 +168,16 @@ async function submitPatch(argv) {
   )
 }
 
-async function rejectPatch(argv) {
+const gerund = s => (s.slice(-1) === 'e' ? s.slice(0, -1) : s) + 'ing'
+
+const capitalize = s => s[0].toUpperCase() + s.slice(1)
+
+const verbPatch = verb => async function(argv) {
   if (argv._.length < 1) { usage() }
   const url = argv._[0]
-  process.stdout.write(`Rejecting patch ${blue(url)} ... `)
+  process.stdout.write(`${gerund(capitalize(verb))} patch ${blue(url)} ... `)
   const o = await requestPOST(
-    { uri: `${url}reject`
+    { uri: `${url}${verb}`
     , headers: {'Accept': 'application/json'}
     , auth: {bearer: await getToken(argv.server)}
     }
@@ -200,7 +206,7 @@ async function createBag(argv) {
 }
 
 const handleError = e => {
-  console.log(red('failed'))
+  console.log(red('failed.'))
   console.log(e.message)
 }
 
@@ -239,8 +245,11 @@ if (require.main === module) {
       case 'submit-patch':
         run(submitPatch, argv)
         break
+      case 'merge-patch':
+        run(verbPatch('merge'), argv)
+        break
       case 'reject-patch':
-        run(rejectPatch, argv)
+        run(verbPatch('reject'), argv)
         break
       case 'create-bag':
         run(createBag, argv)
