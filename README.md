@@ -1,4 +1,4 @@
-## Command line interface for working with PeriodO patches
+## Command line interface for working with PeriodO resources
 
 ```
 Usage: periodo <command>
