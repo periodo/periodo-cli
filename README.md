@@ -7,6 +7,7 @@ Usage: periodo <command>
 
   list-patches
   submit-patch <patch file>
+  merge-patch  <patch url>
   reject-patch <patch url>
   create-bag   <json file> [<uuid>]
 
