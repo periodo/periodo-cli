@@ -43,12 +43,8 @@ const requestPOST = promisify(request.post)
 const readFile = promisify(fs.readFile)
 const writeFile = promisify(fs.writeFile)
 
-const personalDetails = R.path(
-  ['orcid-profile', 'orcid-bio', 'personal-details']
-)
-
+const personalDetails = R.path(['person', 'name'])
 const givenNames = R.pathOr('', ['given-names', 'value'])
-
 const familyName = R.pipe(R.pathOr('', ['family-name', 'value']), R.toUpper)
 
 const personalName = async orcid => {
