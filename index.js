@@ -20,6 +20,7 @@ function usage() {
   where command is one of:
 
   list-patches
+  refresh-token
   submit-patch <patch file>
   merge-patch  <patch url>
   reject-patch <patch url>
@@ -42,6 +43,7 @@ const requestHEAD = promisify(request.head)
 const requestPOST = promisify(request.post)
 const readFile = promisify(fs.readFile)
 const writeFile = promisify(fs.writeFile)
+const deleteFile = promisify(fs.unlink)
 
 const personalDetails = R.path(['person', 'name'])
 const givenNames = R.pathOr('', ['given-names', 'value'])
@@ -79,7 +81,7 @@ const resolveURL = async url => (await requestHEAD(url)).request.uri.href
 async function askForInput(prompt) {
   return new Promise(resolve => {
     const rl = readline.createInterface(
-      {input: process.stdin, output: process.stdout}
+      {input: process.stdin, output: process.stderr}
     )
     rl.question(prompt, input => {
       rl.close()
@@ -103,6 +105,13 @@ Then copy and paste the resulting authentication token here: `)
     await writeFile(TOKEN_FILE, token)
     return token
   }
+}
+
+async function refreshToken(argv) {
+  if (fs.existsSync(TOKEN_FILE)) {
+    await deleteFile(TOKEN_FILE)
+  }
+  await getToken(argv.server)
 }
 
 function extractMessage(buffer) {
@@ -238,6 +247,9 @@ if (require.main === module) {
     switch (argv._.shift()) {
       case 'list-patches':
         run(listPatches, argv)
+        break
+      case 'refresh-token':
+        run(refreshToken, argv)
         break
       case 'submit-patch':
         run(submitPatch, argv)
