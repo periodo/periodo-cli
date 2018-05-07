@@ -74,7 +74,7 @@ async function showPatches(server_url, patches) {
   return Promise.all(R.map(p => showPatch(server_url, p), patches))
 }
 
-const resolve = async url => (await requestHEAD(url)).request.uri.href
+const resolveURL = async url => (await requestHEAD(url)).request.uri.href
 
 async function askForInput(prompt) {
   return new Promise(resolve => {
@@ -228,7 +228,7 @@ if (require.main === module) {
     usage()
   }
 
-  resolve(DEFAULT_SERVER_URL).then(default_server => {
+  resolveURL(DEFAULT_SERVER_URL).then(default_server => {
     if (argv.server === undefined) {
       argv.server = default_server
     }
