@@ -92,7 +92,7 @@ async function getToken(server_url) {
   try {
     return await readFile(TOKEN_FILE)
   } catch (e) {
-    console.log(red('authorization required'))
+    console.error(red('authorization required'))
     const token = await askForInput(`
 An authentication token is needed. Open the following URL in a browser, sign in
 or register with ORCID, and grant the requested permissions to PeriodO:
@@ -120,7 +120,7 @@ async function sendData(filename, options, expectedStatusCode) {
       .on('error', reject)
       .on('response', response => {
         if (response.statusCode === expectedStatusCode) {
-          resolve()
+          resolve(response.headers.location)
         } else {
           requestStream.pipe(concat(buffer => {
             const message = (response.statusCode === 401)
@@ -143,19 +143,19 @@ async function listPatches(argv) {
     `${argv.server}patches?open=true&merged=false&order=asc`).toString()
   const patches = (await requestGET({uri: unmergedPatches, json: true})).body
   if (patches.length) {
-    console.log(`Open and unmerged patches at ${green(argv.server)}:
+    console.error(`Open and unmerged patches at ${green(argv.server)}:
     `)
     R.forEach(console.log, await showPatches(argv.server, patches))
   } else {
-    console.log(`No open and unmerged patches at ${green(argv.server)}.`)
+    console.error(`No open and unmerged patches at ${green(argv.server)}.`)
   }
 }
 
 async function submitPatch(argv) {
   if (argv._.length < 1) { usage() }
   const url = `${argv.server}d.json`
-  process.stdout.write(`Submitting patch to ${blue(url)} ... `)
-  await sendData(
+  process.stderr.write(`Submitting patch to ${blue(url)} ... `)
+  return await sendData(
     argv._[0],
     { url
     , method: 'PATCH'
@@ -173,7 +173,7 @@ const capitalize = s => s[0].toUpperCase() + s.slice(1)
 const verbPatch = verb => async function(argv) {
   if (argv._.length < 1) { usage() }
   const url = argv._[0]
-  process.stdout.write(`${gerund(capitalize(verb))} patch ${blue(url)} ... `)
+  process.stderr.write(`${gerund(capitalize(verb))} patch ${blue(url)} ... `)
   const o = await requestPOST(
     { uri: `${url}${verb}`
     , headers: {'Accept': 'application/json'}
@@ -191,8 +191,8 @@ async function createBag(argv) {
   if (argv._.length < 1) { usage() }
   const uuid = argv._.length > 1 ? argv._[1] : uuidv4()
   const url = `${argv.server}bags/${uuid}`
-  process.stdout.write(`Creating bag ${blue(url)} ... `)
-  await sendData(
+  process.stderr.write(`Creating bag ${blue(url)} ... `)
+  return await sendData(
     argv._[0],
     { url
     , method: 'PUT'
@@ -203,21 +203,20 @@ async function createBag(argv) {
   )
 }
 
-const handleError = e => {
-  console.log(red('failed.'))
-  console.log(e.message)
-}
-
 function run(asyncFn, argv) {
   asyncFn(argv)
-    .then(e => {
-      if (e) {
-        handleError(e)
-      } else {
-        console.log(green('OK'))
+    .then(
+      message => {
+        console.error(green('OK'))
+        if (message) {
+          console.log(message)
+        }
+      },
+      error => {
+        console.error(red('failed'))
+        console.error(error.message)
       }
-    })
-    .catch(handleError)
+    )
 }
 
 if (require.main === module) {
