@@ -25,6 +25,8 @@ function usage() {
   merge-patch  <patch url>
   reject-patch <patch url>
   create-bag   <json file> [<uuid>]
+  update-graph <json file> <graph uri path>
+  delete-graph <graph uri path>
 
   To pipe patches or JSON via stdin use the filename '-'.
 
@@ -41,6 +43,7 @@ const TOKEN_FILE = `${os.homedir()}/.periodo-token`
 const requestGET = promisify(request.get)
 const requestHEAD = promisify(request.head)
 const requestPOST = promisify(request.post)
+const requestDELETE = promisify(request.delete)
 const readFile = promisify(fs.readFile)
 const writeFile = promisify(fs.writeFile)
 const deleteFile = promisify(fs.unlink)
@@ -114,8 +117,7 @@ async function refreshToken(argv) {
   await getToken(argv.server)
 }
 
-function extractMessage(buffer) {
-  const s = buffer.toString('utf8')
+function extractMessage(s) {
   try {
     return JSON.parse(s)
   } catch (e) {
@@ -135,7 +137,7 @@ async function sendData(filename, options, expectedStatusCode) {
             const message = (response.statusCode === 401)
               ? {message: `
 Token has expired. Delete ${TOKEN_FILE} and try again.`}
-              : extractMessage(buffer)
+              : extractMessage(buffer.toString('utf8'))
             reject(message)
           }))
         }
@@ -192,7 +194,7 @@ const verbPatch = verb => async function(argv) {
   if (o.statusCode == 401) {
     throw {message: `Token has expired. Delete ${TOKEN_FILE} and try again.`}
   } else if (o.statusCode != 204) {
-    throw {message: `Server returned ${o.statusCode}`}
+    throw extractMessage(o.body)
   }
 }
 
@@ -210,6 +212,39 @@ async function createBag(argv) {
     },
     201
   )
+}
+
+async function updateGraph(argv) {
+  if (argv._.length < 2) { usage() }
+  const id = argv._[1]
+  const url = `${argv.server}graphs/${id}`
+  process.stderr.write(`Updating graph ${blue(url)} ... `)
+  return await sendData(
+    argv._[0],
+    { url
+    , method: 'PUT'
+    , headers: {'Content-Type': 'application/json'}
+    , auth: {bearer: await getToken(argv.server)}
+    },
+    201
+  )
+}
+
+async function deleteGraph(argv) {
+  if (argv._.length < 1) { usage() }
+  const id = argv._[0]
+  const url = `${argv.server}graphs/${id}`
+  process.stderr.write(`Deleting graph ${blue(url)} ... `)
+  const o = await requestDELETE(
+    { uri: url
+    , auth: {bearer: await getToken(argv.server)}
+    }
+  )
+  if (o.statusCode == 401) {
+    throw {message: `Token has expired. Delete ${TOKEN_FILE} and try again.`}
+  } else if (o.statusCode != 204) {
+    throw {message: `Server returned ${o.statusCode}`}
+  }
 }
 
 function run(asyncFn, argv) {
@@ -262,6 +297,12 @@ if (require.main === module) {
         break
       case 'create-bag':
         run(createBag, argv)
+        break
+      case 'update-graph':
+        run(updateGraph, argv)
+        break
+      case 'delete-graph':
+        run(deleteGraph, argv)
         break
       default:
         usage()
