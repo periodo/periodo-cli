@@ -187,7 +187,7 @@ const verbPatch = verb => async function(argv) {
   process.stderr.write(`${gerund(capitalize(verb))} patch ${blue(url)} ... `)
   const o = await requestPOST(
     { uri: `${url}${verb}`
-    , headers: {'Accept': 'application/json'}
+    , headers: {'Accept': 'application/json', 'Connection': 'keep-alive'}
     , auth: {bearer: await getToken(argv.server)}
     }
   )
