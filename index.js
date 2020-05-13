@@ -20,6 +20,7 @@ function usage() {
   where command is one of:
 
   list-patches
+  list-permissions
   refresh-token
   submit-patch <patch file>
   merge-patch  <patch url>
@@ -147,6 +148,30 @@ Token has expired. Delete ${TOKEN_FILE} and try again.`}
       : fs.createReadStream(filename)
     dataStream.on('error', reject).pipe(requestStream)
   })
+}
+
+async function listPermissions(argv) {
+  const identity = (await requestGET({
+    uri: `${argv.server}identity`,
+    auth: {bearer: await getToken(argv.server)},
+    json: true
+  })).body || {}
+  if (Object.keys(identity).length === 0) {
+    console.error(`Token has expired. Delete ${TOKEN_FILE} and try again.`)
+  } else {
+    console.log(`
+${identity.name}
+${identity.id}
+
+Permissions:
+`)
+    if (identity.permissions.length === 0) {
+      console.log('none')
+    } else {
+      R.forEach(console.log, identity.permissions)
+    }
+    console.log()
+  }
 }
 
 async function listPatches(argv) {
@@ -282,6 +307,9 @@ if (require.main === module) {
     switch (argv._.shift()) {
       case 'list-patches':
         run(listPatches, argv)
+        break
+      case 'list-permissions':
+        run(listPermissions, argv)
         break
       case 'refresh-token':
         run(refreshToken, argv)
