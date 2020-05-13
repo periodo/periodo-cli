@@ -19,7 +19,7 @@
   "license": "CC0-1.0",
   "dependencies": {
     "colors": "^1.2.1",
-    "concat-stream": "^1.6.2",
+    "concat-stream": "^2.0.0",
     "minimist": "^1.2.5",
     "ramda": "^0.25.0",
     "request": "^2.85.0",
