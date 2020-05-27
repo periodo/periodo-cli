@@ -151,14 +151,15 @@ Token has expired. Delete ${TOKEN_FILE} and try again.`}
 }
 
 async function listPermissions(argv) {
-  const identity = (await requestGET({
+  const response = await requestGET({
     uri: `${argv.server}identity`,
     auth: {bearer: await getToken(argv.server)},
     json: true
-  })).body || {}
-  if (Object.keys(identity).length === 0) {
-    console.error(`Token has expired. Delete ${TOKEN_FILE} and try again.`)
+  })
+  if (response.statusCode == 401) {
+    throw {message: `Token has expired. Delete ${TOKEN_FILE} and try again.`}
   } else {
+    const identity = response.body || {}
     console.log(`
 ${identity.name}
 ${identity.id}
