@@ -1,16 +1,14 @@
 #!/usr/bin/env node
 
 const R = require('ramda')
-    , concat = require('concat-stream')
     , fs = require('fs')
     , os = require('os')
     , parseArgs = require('minimist')
     , readline = require('readline')
-    , request = require('request')
+    , axios = require('axios')
     , {v4: uuidv4} = require('uuid')
-    , {URL} = require('url')
     , {basename} = require('path')
-    , {red, green, blue, black} = require('colors/safe')
+    , {red, green, blue, black} = require('@colors/colors/safe')
     , {promisify} = require('util')
 
 function usage() {
@@ -41,10 +39,6 @@ function usage() {
 const DEFAULT_SERVER_URL = 'http://n2t.net/ark:/99152/p0'
 const TOKEN_FILE = `${os.homedir()}/.periodo-token`
 
-const requestGET = promisify(request.get)
-const requestHEAD = promisify(request.head)
-const requestPOST = promisify(request.post)
-const requestDELETE = promisify(request.delete)
 const readFile = promisify(fs.readFile)
 const writeFile = promisify(fs.writeFile)
 const deleteFile = promisify(fs.unlink)
@@ -55,8 +49,11 @@ const familyName = R.pipe(R.pathOr('', ['family-name', 'value']), R.toUpper)
 
 const personalName = async orcid => {
   try {
-    const o = (await requestGET({uri: orcid, json: true})).body
-        , details = personalDetails(o)
+    const response = await axios.get(
+      orcid,
+      {headers: {'Accept': 'application/json'}}
+    )
+    const details = personalDetails(response.data)
     if (details === undefined) {
       return 'anonymous'
     }
@@ -69,18 +66,35 @@ const personalName = async orcid => {
 
 const b = black.bold
 
+const viewPatchURL = patch_url => {
+  const url = new URL(patch_url)
+  const server_url = `https://${url.host}/`
+  const view_url = new URL(server_url.replace('data', 'client'))
+  view_url.pathname = '/'
+  view_url.search = (
+    '?page=review-patch'
+    + `&backendID=web-${encodeURIComponent(server_url)}`
+    + `&patchURL=${encodeURIComponent(url.pathname)}`
+  )
+  return view_url
+}
+
 const showPatch = async (server_url, {url, created_by, created_at}) => (
-`${b('url')}: ${blue(url)}
+` ${b('url')}: ${blue(url)}
  ${b('who')}: ${created_by} (${await personalName(created_by)})
 ${b('when')}: ${created_at}
-${b('view')}: ${server_url}#/patches/${url}
-`)
+${b('view')}: ${viewPatchURL(url)}
+`
+)
 
 async function showPatches(server_url, patches) {
   return Promise.all(R.map(p => showPatch(server_url, p), patches))
 }
 
-const resolveURL = async url => (await requestHEAD(url)).request.uri.href
+const resolveURL = async url => {
+  const request = (await axios.head(url)).request
+  return `${request.protocol}//${request.host}${request.path}`
+}
 
 async function askForInput(prompt) {
   return new Promise(resolve => {
@@ -118,48 +132,38 @@ async function refreshToken(argv) {
   await getToken(argv.server)
 }
 
-function extractMessage(s) {
-  try {
-    return JSON.parse(s)
-  } catch (e) {
-    return {message: s}
-  }
-}
+const extractMessage = o => ('message' in o) ? o : {message: JSON.stringify(o)}
 
-async function sendData(filename, options, expectedStatusCode) {
+async function sendData(client, filename, options, expectedStatus) {
   return new Promise((resolve, reject) => {
-    const requestStream = request(options)
-      .on('error', reject)
-      .on('response', response => {
-        if (response.statusCode === expectedStatusCode) {
-          resolve(response.headers.location)
-        } else {
-          requestStream.pipe(concat(buffer => {
-            const message = (response.statusCode === 401)
-              ? {message: `
-Token has expired. Delete ${TOKEN_FILE} and try again.`}
-              : extractMessage(buffer.toString('utf8'))
-            reject(message)
-          }))
-        }
-      })
-    const dataStream = (filename === '-')
+    options.data = (filename === '-')
       ? process.stdin
       : fs.createReadStream(filename)
-    dataStream.on('error', reject).pipe(requestStream)
+    client.request(options)
+      .then(response => {
+        if (response.status === expectedStatus) {
+          resolve(response.headers.location)
+        } else {
+          const message = (response.status === 401)
+              ? {message: `
+Token has expired. Delete ${TOKEN_FILE} and try again.`}
+              : extractMessage(response.data)
+            reject(message)
+        }
+      })
+      .catch(reject)
   })
 }
 
-async function listPermissions(argv) {
-  const response = await requestGET({
-    uri: `${argv.server}identity`,
-    auth: {bearer: await getToken(argv.server)},
-    json: true
-  })
-  if (response.statusCode == 401) {
+async function listPermissions(client, argv) {
+  const response = await client.get(
+    'identity',
+    { headers: {'Authorization': `Bearer ${await getToken(argv.server)}`} }
+  )
+  if (response.status == 401) {
     throw {message: `Token has expired. Delete ${TOKEN_FILE} and try again.`}
   } else {
-    const identity = response.body || {}
+    const identity = response.data || {}
     console.log(`
 ${identity.name}
 ${identity.id}
@@ -175,10 +179,16 @@ Permissions:
   }
 }
 
-async function listPatches(argv) {
-  const unmergedPatches = new URL(
-    `${argv.server}patches?open=true&merged=false&order=asc`).toString()
-  const patches = (await requestGET({uri: unmergedPatches, json: true})).body
+async function listPatches(client, argv) {
+  const patches = (await client.get(
+    'patches',
+    { params:
+      { open: 'true'
+      , merged: 'false'
+      , order: 'asc'
+      }
+    }
+  )).data
   if (patches.length) {
     console.error(`Open and unmerged patches at ${green(argv.server)}:
     `)
@@ -188,93 +198,110 @@ async function listPatches(argv) {
   }
 }
 
-async function submitPatch(argv) {
+async function submitPatch(client, argv) {
   if (argv._.length < 1) { usage() }
   const url = `${argv.server}d.json`
   process.stderr.write(`Submitting patch to ${blue(url)} ... `)
-  return await sendData(
+  const patch_url = await sendData(
+    client,
     argv._[0],
     { url
     , method: 'PATCH'
-    , headers: {'Content-Type': 'application/json'}
-    , auth: {bearer: await getToken(argv.server)}
+    , headers:
+      { 'Content-Type': 'application/json'
+      , 'Authorization': `Bearer ${await getToken(argv.server)}`
+      }
     },
     202
   )
+  return `
+${patch_url}
+
+${viewPatchURL(patch_url)}
+`
 }
 
 const gerund = s => (s.slice(-1) === 'e' ? s.slice(0, -1) : s) + 'ing'
 
 const capitalize = s => s[0].toUpperCase() + s.slice(1)
 
-const verbPatch = verb => async function(argv) {
+const verbPatch = verb => async function(client, argv) {
   if (argv._.length < 1) { usage() }
   const url = argv._[0]
   process.stderr.write(`${gerund(capitalize(verb))} patch ${blue(url)} ... `)
-  const o = await requestPOST(
-    { uri: `${url}${verb}`
-    , headers: {'Accept': 'application/json', 'Connection': 'keep-alive'}
-    , auth: {bearer: await getToken(argv.server)}
+  const response = await client.request(
+    { url: `${url}${verb}`
+    , method: 'post'
+    , headers:
+      { 'Accept': 'application/json'
+      , 'Connection': 'keep-alive'
+      , 'Authorization': `Bearer ${await getToken(argv.server)}`
+      }
     }
   )
-  if (o.statusCode == 401) {
+  if (response.status == 401) {
     throw {message: `Token has expired. Delete ${TOKEN_FILE} and try again.`}
-  } else if (o.statusCode != 204) {
-    throw extractMessage(o.body)
+  } else if (response.status != 204) {
+    throw extractMessage(response.data)
   }
 }
 
-async function createBag(argv) {
+async function createBag(client, argv) {
   if (argv._.length < 1) { usage() }
   const uuid = argv._.length > 1 ? argv._[1] : uuidv4()
   const url = `${argv.server}bags/${uuid}`
   process.stderr.write(`Creating bag ${blue(url)} ... `)
   return await sendData(
+    client,
     argv._[0],
     { url
     , method: 'PUT'
-    , headers: {'Content-Type': 'application/json'}
-    , auth: {bearer: await getToken(argv.server)}
+    , headers:
+      { 'Content-Type': 'application/json'
+      , 'Authorization': `Bearer ${await getToken(argv.server)}`
+      }
     },
     201
   )
 }
 
-async function updateGraph(argv) {
+async function updateGraph(client, argv) {
   if (argv._.length < 2) { usage() }
   const id = argv._[1]
   const url = `${argv.server}graphs/${id}`
   process.stderr.write(`Updating graph ${blue(url)} ... `)
   return await sendData(
+    client,
     argv._[0],
     { url
     , method: 'PUT'
-    , headers: {'Content-Type': 'application/json'}
-    , auth: {bearer: await getToken(argv.server)}
+    , headers:
+      { 'Content-Type': 'application/json'
+      , 'Authorization': `Bearer ${await getToken(argv.server)}`
+      }
     },
     201
   )
 }
 
-async function deleteGraph(argv) {
+async function deleteGraph(client, argv) {
   if (argv._.length < 1) { usage() }
   const id = argv._[0]
-  const url = `${argv.server}graphs/${id}`
+  const url = `graphs/${id}`
   process.stderr.write(`Deleting graph ${blue(url)} ... `)
-  const o = await requestDELETE(
-    { uri: url
-    , auth: {bearer: await getToken(argv.server)}
-    }
+  const response = await client.delete(
+    url,
+    {headers: {'Authorization': `Bearer ${await getToken(argv.server)}`}}
   )
-  if (o.statusCode == 401) {
+  if (response.status == 401) {
     throw {message: `Token has expired. Delete ${TOKEN_FILE} and try again.`}
-  } else if (o.statusCode != 204) {
-    throw {message: `Server returned ${o.statusCode}`}
+  } else if (response.status != 204) {
+    throw {message: `Server returned ${response.status}`}
   }
 }
 
-function run(asyncFn, argv) {
-  asyncFn(argv)
+function run(asyncFn, client, argv) {
+  asyncFn(client, argv)
     .then(
       message => {
         console.error(green('OK'))
@@ -305,33 +332,39 @@ if (require.main === module) {
       argv.server += '/'
     }
 
+    const client = axios.create(
+      { baseURL: argv.server
+      , validateStatus: status => status < 500
+      }
+    )
+
     switch (argv._.shift()) {
       case 'list-patches':
-        run(listPatches, argv)
+        run(listPatches, client, argv)
         break
       case 'list-permissions':
-        run(listPermissions, argv)
+        run(listPermissions, client, argv)
         break
       case 'refresh-token':
         run(refreshToken, argv)
         break
       case 'submit-patch':
-        run(submitPatch, argv)
+        run(submitPatch, client, argv)
         break
       case 'merge-patch':
-        run(verbPatch('merge'), argv)
+        run(verbPatch('merge'), client, argv)
         break
       case 'reject-patch':
-        run(verbPatch('reject'), argv)
+        run(verbPatch('reject'), client, argv)
         break
       case 'create-bag':
-        run(createBag, argv)
+        run(createBag, client, argv)
         break
       case 'update-graph':
-        run(updateGraph, argv)
+        run(updateGraph, client, argv)
         break
       case 'delete-graph':
-        run(deleteGraph, argv)
+        run(deleteGraph, client, argv)
         break
       default:
         usage()
