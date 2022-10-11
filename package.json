@@ -1,6 +1,6 @@
 {
   "name": "periodo-cli",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "CLI for working with PeriodO resources",
   "repository": {
     "type": "git",
