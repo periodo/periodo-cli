@@ -92,7 +92,7 @@ async function showPatches(server_url, patches) {
 }
 
 const resolveURL = async url => {
-  const request = (await axios.head(url)).request
+  const request = (await axios.head(url, {decompress: false})).request
   return `${request.protocol}//${request.host}${request.path}`
 }
 
