@@ -36,7 +36,7 @@ function usage() {
   process.exit(1)
 }
 
-const DEFAULT_SERVER_URL = 'http://n2t.net/ark:/99152/p0'
+const DEFAULT_SERVER_URL = 'https://data.perio.do/'
 const TOKEN_FILE = `${os.homedir()}/.periodo-token`
 
 const readFile = promisify(fs.readFile)
@@ -89,11 +89,6 @@ ${b('view')}: ${viewPatchURL(url)}
 
 async function showPatches(server_url, patches) {
   return Promise.all(R.map(p => showPatch(server_url, p), patches))
-}
-
-const resolveURL = async url => {
-  const request = (await axios.head(url, {decompress: false})).request
-  return `${request.protocol}//${request.host}${request.path}`
 }
 
 async function askForInput(prompt) {
@@ -324,51 +319,50 @@ if (require.main === module) {
     usage()
   }
 
-  resolveURL(DEFAULT_SERVER_URL).then(default_server => {
-    if (argv.server === undefined) {
-      argv.server = default_server
-    }
-    if (argv.server.slice(-1) !== '/') {
-      argv.server += '/'
-    }
+  if (argv.server === undefined) {
+    argv.server = DEFAULT_SERVER_URL
+  }
+  if (argv.server.slice(-1) !== '/') {
+    argv.server += '/'
+  }
 
-    const client = axios.create(
-      { baseURL: argv.server
-      , validateStatus: status => status < 500
-      }
-    )
-
-    switch (argv._.shift()) {
-      case 'list-patches':
-        run(listPatches, client, argv)
-        break
-      case 'list-permissions':
-        run(listPermissions, client, argv)
-        break
-      case 'refresh-token':
-        run(refreshToken, argv)
-        break
-      case 'submit-patch':
-        run(submitPatch, client, argv)
-        break
-      case 'merge-patch':
-        run(verbPatch('merge'), client, argv)
-        break
-      case 'reject-patch':
-        run(verbPatch('reject'), client, argv)
-        break
-      case 'create-bag':
-        run(createBag, client, argv)
-        break
-      case 'update-graph':
-        run(updateGraph, client, argv)
-        break
-      case 'delete-graph':
-        run(deleteGraph, client, argv)
-        break
-      default:
-        usage()
-        break
+  const client = axios.create(
+    { baseURL: argv.server
+    , validateStatus: status => status < 500
+    , headers: {'User-Agent': 'PeriodO CLI 3.0'}
     }
-  })
+  )
+
+  switch (argv._.shift()) {
+  case 'list-patches':
+    run(listPatches, client, argv)
+    break
+  case 'list-permissions':
+    run(listPermissions, client, argv)
+    break
+  case 'refresh-token':
+    run(refreshToken, argv)
+    break
+  case 'submit-patch':
+    run(submitPatch, client, argv)
+    break
+  case 'merge-patch':
+    run(verbPatch('merge'), client, argv)
+    break
+  case 'reject-patch':
+    run(verbPatch('reject'), client, argv)
+    break
+  case 'create-bag':
+    run(createBag, client, argv)
+    break
+  case 'update-graph':
+    run(updateGraph, client, argv)
+    break
+  case 'delete-graph':
+    run(deleteGraph, client, argv)
+    break
+  default:
+    usage()
+    break
+  }
 }
