@@ -131,9 +131,14 @@ const extractMessage = o => ('message' in o) ? o : {message: JSON.stringify(o)}
 
 async function sendData(client, filename, options, expectedStatus) {
   return new Promise((resolve, reject) => {
-    options.data = (filename === '-')
-      ? process.stdin
-      : fs.createReadStream(filename)
+    if (filename === '-') {
+      options.data = process.stdin;
+      // Can't set Content-Length for process.stdin easily since its size is unknown
+    } else {
+      options.data = fs.createReadStream(filename);
+      const fileSize = fs.statSync(filename).size;
+      options.headers['Content-Length'] = fileSize;
+    }
     client.request(options)
       .then(response => {
         if (response.status === expectedStatus) {
