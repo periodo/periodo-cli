@@ -128,7 +128,7 @@ async function refreshToken(argv) {
   await getToken(argv.server)
 }
 
-const extractMessage = o => ('message' in o) ? o : {message: JSON.stringify(o)}
+const extractMessage = o => (o && typeof o === 'object' && 'message' in o) ? o : {message: typeof o === 'string' ? o : JSON.stringify(o)}
 
 async function sendData(client, filename, options, expectedStatus) {
   return new Promise((resolve, reject) => {
