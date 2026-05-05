@@ -21,6 +21,7 @@ function usage() {
   list-permissions
   refresh-token
   submit-patch <patch file>
+  update-patch <patch file> <patch url>
   merge-patch  <patch url>
   reject-patch <patch url>
   create-bag   <json file> [<uuid>]
@@ -265,6 +266,24 @@ async function createBag(client, argv) {
   )
 }
 
+async function updatePatch(client, argv) {
+  if (argv._.length < 2) { usage() }
+  const url = `${argv._[1]}patch.jsonpatch`
+  process.stderr.write(`Updating patch ${blue(url)} ... `)
+  await sendData(
+    client,
+    argv._[0],
+    { url
+    , method: 'PUT'
+    , headers:
+      { 'Content-Type': 'application/json'
+      , 'Authorization': `Bearer ${await getToken(argv.server)}`
+      }
+    },
+    200
+  )
+}
+
 async function updateGraph(client, argv) {
   if (argv._.length < 2) { usage() }
   const id = argv._[1]
@@ -350,6 +369,9 @@ if (require.main === module) {
     break
   case 'submit-patch':
     run(submitPatch, client, argv)
+    break
+  case 'update-patch':
+    run(updatePatch, client, argv)
     break
   case 'merge-patch':
     run(verbPatch('merge'), client, argv)
